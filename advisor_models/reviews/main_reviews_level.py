@@ -15,7 +15,7 @@ def skyrl_entrypoint(cfg: DictConfig):
     # Register the reviews environment inside the entrypoint task (no need to modify the skyrl-gym package).
     register(
         id="reviews_level",
-        entry_point="advisor_models.reviews.env_level:ReviewsLevelEnv",
+        entry_point="advisor_models.reviews.env_reviews_level:ReviewsLevelEnv",
     )
 
     # make sure that the training loop is not run on the head node.

@@ -107,13 +107,10 @@ def process_math_task(task: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "prompt": prompt,
         "env_class": "math_solutions",
-        "reward_spec": {
-            "judge_criteria": task["judge_criteria"],
-        },
-        # The following keys become ``extras`` in the env
+        "reward_spec": {"ground_truth": task["judge_criteria"]},
         "original_question": task["problem"],
         "student": task["student"],
-        "ground_truth_answer": task["answer"],
+        "math_correct_answer": task["answer"],
     }
 
 
@@ -173,8 +170,8 @@ if __name__ == "__main__":
     )
 
     # Process tasks to create training examples
-    train_rows = process_tasks(train_tasks, "train")
-    val_rows = process_tasks(val_tasks, "validation")
+    train_rows = process_tasks(train_tasks)
+    val_rows = process_tasks(val_tasks)
 
     # Write to parquet
     os.makedirs(args.output_dir, exist_ok=True)

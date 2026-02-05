@@ -53,7 +53,7 @@ The task is: {prompt}
 Provide specific advice about the review for {person}. Keep your advice to 3-4 sentences."""
 
 
-# System prompt for student model (writes the actual review)
+# Prompts for student model (writes the actual review)
 STUDENT_SYSTEM_PROMPT = """You are a review writer. Based on the prompt and advisor guidance, write a review that follows the guidance provided. Write a clear, well-structured review."""
 
 STUDENT_INSTRUCTION = """Review Prompt: {prompt}
@@ -62,6 +62,14 @@ Advisor Guidance:
 {advisor_feedback}
 
 Write a review following the advisor's guidance."""
+
+# Baseline prompts
+BASELINE_SYSTEM_PROMPT = (
+    """You are a review writer. Based on the prompt, write a review."""
+)
+BASELINE_INSTRUCTION = """You are writing a review for {person}.
+
+Review Prompt: {prompt}"""
 
 
 def compute_length_reward(review_text: str, preferred_length: int) -> float:

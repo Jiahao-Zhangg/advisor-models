@@ -3,33 +3,36 @@
 Provides RuleArenaEnv class for US tax calculation with advisor feedback.
 """
 
-from skyrl_gym.envs.base_text_env import BaseTextEnv, BaseTextEnvStepOutput
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from omegaconf import DictConfig
-import re
-import numpy as np
-from openai import OpenAI
-from .config import STUDENT_SYSTEM_PROMPT
+
+from ..env_base import BaseAdvisorEnv
+from .config import STUDENT_SYSTEM_PROMPT, build_prompt, compute_score
 
 
-class RuleArenaEnv(BaseTextEnv):
+class RuleArenaEnv(BaseAdvisorEnv):
     def __init__(self, env_config: DictConfig, extras: Dict[str, Any] = {}):
-        super().__init__()
+        super().__init__(env_config, extras)
 
-        assert "reward_spec" in extras, "reward_spec field is required"
-        assert "ground_truth" in extras["reward_spec"], (
-            "ground_truth is required in reward_spec field"
-        )
-        assert "original_question" in extras
-        assert "original_response" in extras
+        assert "info_dict" in extras, "Taxpayer dict not found in extras"
+        self.taxpayer_dict = extras["info_dict"]
 
-        self.ground_truth = extras["reward_spec"]["ground_truth"]
-        self.original_question = extras["original_question"]
-        self.original_response = extras["original_response"]
-        self.model = extras["model"]
-        self.initial_reward = extras.get("initial_reward", None)
+    def _build_baseline_prompt(
+        self, prompt: List[Dict[str, str]]
+    ) -> Tuple[List[Dict[str, str]], str]:
+        formatted_prompt = build_prompt(self.taxpayer_dict)
+        return [
+            {"role": "user", "content": formatted_prompt},
+        ], formatted_prompt
 
-    def _build_prompt(self, advisor_feedback: str) -> List[Dict[str, str]]:
+    def _build_advisor_prompt(
+        self, prompt: List[Dict[str, str]]
+    ) -> Tuple[List[Dict[str, str]], str]:
+        return super()._build_advisor_prompt(prompt)
+
+    def _build_student_prompt(
+        self, advisor_feedback: str
+    ) -> Tuple[List[Dict[str, str]], str]:
         """Compose the prompt sent to the student model."""
 
         # parse out think block
@@ -41,83 +44,16 @@ class RuleArenaEnv(BaseTextEnv):
             {"role": "user", "content": self.original_question},
             {"role": "assistant", "content": self.original_response},
             {"role": "user", "content": advisor_feedback},
-        ]
+        ], "[ADVISOR FEEDBACK W/O THINK BLOCK PROVIDED AS NEXT USER TURN]"
 
-    def call_openai(
-        self, messages: List[Dict[str, str]], temperature: float = 0.0
-    ) -> str:
-        """Call the chat completion endpoint using OpenAI client."""
+    def _compute_step(self) -> Tuple[float, bool, Dict[str, Any]]:
         try:
-            client = OpenAI()
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-            )
-            return response.choices[0].message.content
-        except Exception as e:  # pragma: no cover
-            print(f"[RuleArenaEnv] LLM request failed: {e}")
-            return ""
+            reward, info = compute_score(self.final_response, self.ground_truth)
+            return reward, True, {"reward_info": info}
+        except Exception as e:
+            return 0.0, True, {"reward_info": f"Failed to compute reward: {e}"}
 
-    def step(self, action: str) -> BaseTextEnvStepOutput:
-        """Single-step episode evaluating advisor feedback.
-
-        The agent (`action`) provides feedback which is forwarded to the
-        student model. The returned solution is scored against the ground
-        truth and a sparse reward is provided.
-        """
-        prompt = self._build_prompt(action)
-        updated_response = self.call_openai(prompt)
-
-        # Extract answer
-        extracted_answer = extract_answer(updated_response)
-
-        # Compute reward
-        reward = compute_score(extracted_answer, self.ground_truth)
-
-        metadata = {
-            "extracted_answer": extracted_answer,
-            "ground_truth": self.ground_truth,
-            "updated_response": updated_response,
-        }
-
-        # Add initial_reward to metadata if available
-        if self.initial_reward is not None:
-            metadata["initial_reward"] = self.initial_reward
-
-        return BaseTextEnvStepOutput(
-            observations=[], reward=reward, done=True, metadata=metadata
-        )
-
-
-def extract_answer(response_str: str) -> str:
-    """Extract the final answer from the response."""
-    # Use RuleArena's exact regex pattern for tax extraction
-    pattern = (
-        r"The total tax (owed|overpaid) is \$((?:\d{1,3}(?:,\d{3})*|\d+)(\.\d+)?)\.?"
-    )
-    match = re.search(pattern, response_str)
-    if match:
-        status = match.group(1)  # "owed" or "overpaid"
-        value = float(match.group(2).replace(",", ""))
-        # Return negative value for overpaid (as per RuleArena implementation)
-        return str(-value if status == "overpaid" else value)
-
-    # Fallback: return the last line or the whole response if extraction fails
-    lines = response_str.strip().split("\n")
-    return lines[-1].strip() if lines else ""
-
-
-def compute_score(extracted_answer: str, ground_truth: str) -> float:
-    """Compute the score based."""
-    if not extracted_answer:
-        return 0.0
-
-    # use numpy.isclose like RuleArena reference
-    try:
-        extracted_val = float(extracted_answer.replace(",", "").replace("$", ""))
-        ground_truth_val = float(str(ground_truth).replace(",", "").replace("$", ""))
-        # Use numpy.isclose for comparison (matches RuleArena implementation)
-        return 1.0 if np.isclose(extracted_val, ground_truth_val) else 0.0
-    except (ValueError, TypeError):
-        return 0.0
+    def _get_metadata(self) -> Dict[str, Any]:
+        metadata = super()._get_metadata()
+        metadata["other_info"] = self.reward_info["reward_info"]
+        return metadata

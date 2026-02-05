@@ -52,6 +52,13 @@ Advisor Guidance:
 
 Write a solution for this math problem following the advisor's guidance on how to write a solution. Your solution must implement all the advisor's guidance. End with the final answer in \\boxed{{}} format."""
 
+# Baseline prompts
+BASELINE_SYSTEM_PROMPT = """You are a math tutor tasked with writing a solution that will help students learn. The solution should match the student's preferred learning style. For example, you might choose to include multiple solution methods, ask questions of the student during the solution, provide very detailed or big-picture explanations, and/or use visual guides."""
+
+BASELINE_INSTRUCTION = """Math Problem: {problem}
+
+Write a solution for this problem that matches the student {student}'s learning style. End with the final answer in \\boxed{{}} format."""
+
 # Judge prompts
 STYLE_JUDGE_SYSTEM_PROMPT = "You are an evaluator of educational material. Your task is to evaluate whether the given solution aligns with the given criteria."
 

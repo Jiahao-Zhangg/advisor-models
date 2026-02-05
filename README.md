@@ -1,6 +1,6 @@
 # How to Train Your Advisor: Steering Black-Box LLMs with Advisor Models
 
-Authors: *Parth Asawa\*, Alan Zhu\*, Matei Zaharia, Alexandros G. Dimakis, Joseph E. Gonzalez*
+Authors: *Parth Asawa\*, Alan Zhu\*, Abby O'Neill, Matei Zaharia, Alexandros G. Dimakis, Joseph E. Gonzalez*
 
 *Equal contribution.
 
@@ -16,10 +16,6 @@ To setup the (separate) training virtual environment for all example environment
 cd SkyRL/skyrl-train
 uv sync --extra vllm
 source .venv/bin/activate
-uv add litellm==1.74.15.post1
-uv add math-verify
-uv add evaluate
-uv pip install sacrebleu
 ```
 
 Training script examples are provided in the ```advisor_models``` directory, along with templates for new environments. You will also need to have specified an ```OPENAI_API_KEY``` and ```WANDB_API_KEY``` in your environment.
@@ -50,10 +46,10 @@ Please feel free to reach out at pgasawa@berkeley.edu & aczhu@berkeley.edu!
 ## 📋 Citation
 
 ```text
-@article{asawa2025trainadvisorsteeringblackbox,
+@article{asawa2026trainadvisorsteeringblackbox,
   title={How to Train Your Advisor: Steering Black-Box LLMs with Advisor Models},
-  author={Parth Asawa and Alan Zhu and Matei Zaharia and Alexandros G. Dimakis and Joseph E. Gonzalez},
-  year={2025},
+  author={Parth Asawa and Alan Zhu and Abby O'Neill and Matei Zaharia and Alexandros G. Dimakis and Joseph E. Gonzalez},
+  year={2026},
   journal={arXiv preprint arXiv:2510.02453},
 } 
 ```

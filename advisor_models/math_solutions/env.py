@@ -4,99 +4,71 @@ Provides MathSolutionsEnv class for math solution writing with advisor feedback.
 Evaluates generated solutions for style alignment.
 """
 
-from skyrl_gym.envs.base_text_env import BaseTextEnv, BaseTextEnvStepOutput
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from omegaconf import DictConfig
 from openai import OpenAI
 
+from ..env_base import BaseAdvisorEnv
 from .config import (
     STUDENT_SYSTEM_PROMPT,
     STUDENT_INSTRUCTION,
     STYLE_JUDGE_SYSTEM_PROMPT,
     STYLE_JUDGE_PROMPT,
+    BASELINE_SYSTEM_PROMPT,
+    BASELINE_INSTRUCTION,
 )
 
 
-class MathSolutionsEnv(BaseTextEnv):
+class MathSolutionsEnv(BaseAdvisorEnv):
     """Environment for math solution writing with advisor feedback using 2-step flow."""
 
     def __init__(self, env_config: DictConfig, extras: Dict[str, Any] = {}):
-        super().__init__()
+        super().__init__(env_config, extras)
 
-        # Required fields
-        assert "reward_spec" in extras, "reward_spec field is required"
-        assert "judge_criteria" in extras["reward_spec"], (
-            "judge_criteria field is required"
-        )
-        assert "original_question" in extras, "original_question field is required"
+        # additional required fields
         assert "student" in extras, "student field is required"
-        assert "ground_truth_answer" in extras, "ground_truth_answer field is required"
+        assert "math_correct_answer" in extras, "math_correct_answer field is required"
 
-        self.original_question = extras["original_question"]
         self.student = extras["student"]
-        self.ground_truth_answer = extras["ground_truth_answer"]
-        self.judge_criteria = extras["reward_spec"]["judge_criteria"]
+        self.math_correct_answer = extras["math_correct_answer"]
 
-    def _build_student_prompt(self, advisor_feedback: str) -> List[Dict[str, str]]:
+    def _build_baseline_prompt(
+        self, prompt: List[Dict[str, str]]
+    ) -> Tuple[List[Dict[str, str]], str]:
+        """Build prompt for baseline model to solve the math problem."""
+        formatted_prompt = BASELINE_INSTRUCTION.format(
+            problem=self.original_question, student=self.student
+        )
+        return [
+            {"role": "system", "content": BASELINE_SYSTEM_PROMPT},
+            {"role": "user", "content": formatted_prompt},
+        ], formatted_prompt
+
+    def _build_advisor_prompt(
+        self, prompt: List[Dict[str, str]]
+    ) -> Tuple[List[Dict[str, str]], str]:
+        return super()._build_advisor_prompt(prompt)
+
+    def _build_student_prompt(
+        self, advisor_feedback: str
+    ) -> Tuple[List[Dict[str, str]], str]:
         """Build prompt for student model to solve the math problem."""
-        user_context = STUDENT_INSTRUCTION.format(
+        formatted_prompt = STUDENT_INSTRUCTION.format(
             problem=self.original_question,
             advisor_feedback=advisor_feedback,
         )
 
         return [
             {"role": "system", "content": STUDENT_SYSTEM_PROMPT},
-            {"role": "user", "content": user_context},
-        ]
+            {"role": "user", "content": formatted_prompt},
+        ], formatted_prompt
 
-    def call_openai(
-        self, messages: List[Dict[str, str]], temperature: float = 0.0
-    ) -> str:
-        """Call the chat completion endpoint using OpenAI client."""
-        try:
-            client = OpenAI()
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                temperature=temperature,
-            )
-            return response.choices[0].message.content
-        except Exception as e:  # pragma: no cover
-            print(f"[MathSolutionsEnv] LLM request failed: {e}")
-            return ""
-
-    def step(self, action: str) -> BaseTextEnvStepOutput:
-        """Execute one step: advisor feedback -> student model -> solution evaluation."""
-        # Step 1: Advisor provides feedback (this is the action)
-        advisor_feedback = action
-
-        # Step 2: Build prompt for student model with advisor feedback
-        messages = self._build_student_prompt(advisor_feedback)
-
-        # Step 3: Get solution from student model
-        solution_response = self.call_openai(messages, temperature=0.0)
-
-        # Step 4: Compute reward
-        total_reward = self._compute_reward(solution_response)
-
-        return BaseTextEnvStepOutput(
-            observations=[],
-            reward=total_reward,
-            done=True,
-            metadata={
-                "advisor_feedback": advisor_feedback,
-                "updated_response": solution_response,
-                "ground_truth": self._format_task_info(),
-            },
-        )
-
-    def _compute_reward(self, solution: str) -> float:
-        """Compute style matching reward using LLM-as-a-judge."""
+    def _compute_step(self) -> Tuple[float, bool, Dict[str, Any]]:
         try:
             judge_prompt = STYLE_JUDGE_PROMPT.format(
-                judge_criteria=self.judge_criteria,
-                solution=solution,
+                judge_criteria=self.ground_truth,
+                solution=self.final_response,
             )
 
             client = OpenAI()
@@ -113,16 +85,19 @@ class MathSolutionsEnv(BaseTextEnv):
 
             # Parse the three-way response: ACCEPT=1.0, PARTIAL=0.4, REJECT=0.0
             if "ACCEPT" in judge_response:
-                return 1.0
+                return 1.0, True, {}
             elif "PARTIAL" in judge_response:
-                return 0.4
+                return 0.4, True, {}
             else:  # REJECT or any other response
-                return 0.0
+                return 0.0, True, {}
 
         except Exception as e:
             print(f"Error computing style reward: {e}")
-            return 0.0
+            return 0.0, True, {}
 
-    def _format_task_info(self) -> str:
-        """Format task information in natural language."""
-        return f"{self.student} prefers:\n{self.judge_criteria}\nAnswer was {self.ground_truth_answer}"
+    def _get_metadata(self) -> Dict[str, Any]:
+        metadata = super()._get_metadata()
+        metadata["other_info"] = (
+            f"Student: {self.student}\nCorrect Answer: {self.math_correct_answer}"
+        )
+        return metadata

@@ -26,7 +26,7 @@ import pandas as pd
 import pylcs
 from tqdm import tqdm
 
-from config import ADVISOR_INITIAL_INSTRUCTIONS, ADVISOR_FINAL_INSTRUCTIONS
+from config import ADVISOR_PROMPT_PREFIX, ADVISOR_PROMPT_SUFFIX
 
 
 def load_mtob_train_data(mtob_path: str) -> List[Dict[str, Any]]:
@@ -180,7 +180,7 @@ def build_advisor_prompt(
     """Build advisor prompt with optional reference materials using MTOB baseline approach."""
 
     # Start with base translation instruction
-    base_prompt = ADVISOR_INITIAL_INSTRUCTIONS.format(source_text=source_text)
+    base_prompt = ADVISOR_PROMPT_PREFIX.format(source_text=source_text)
 
     reference_sections = []
 
@@ -205,7 +205,7 @@ def build_advisor_prompt(
         full_prompt = base_prompt
 
     # Add final instruction
-    full_prompt += ADVISOR_FINAL_INSTRUCTIONS.format(source_text=source_text)
+    full_prompt += ADVISOR_PROMPT_SUFFIX.format(source_text=source_text)
 
     return full_prompt
 
@@ -327,8 +327,8 @@ def main():
             row = {
                 "prompt": [{"role": "user", "content": advisor_prompt}],
                 "env_class": "mtob",
-                "original_question": source_text,
                 "reward_spec": {"ground_truth": ground_truth},
+                "original_question": source_text,
                 "reference_materials": reference_materials,
             }
 
