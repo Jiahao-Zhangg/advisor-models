@@ -2,15 +2,21 @@
 
 # Training script for math solutions domain
 
+# Resolve repo root (directory containing this scripts/ folder).
+ADVISOR_MODELS_ROOT="${ADVISOR_MODELS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+cd "$ADVISOR_MODELS_ROOT" || exit 1
+
 # Set environment variables
 export RAY_RUNTIME_ENV_HOOK=ray._private.runtime_env.uv_runtime_env_hook.hook
-export PYTHONPATH="/advisor-models/SkyRL/skyrl-train:$PYTHONPATH"
-export DATA_DIR="/advisor-models/data/math_solutions"
+export PYTHONPATH="$ADVISOR_MODELS_ROOT/SkyRL/skyrl-train:$PYTHONPATH"
+export DATA_DIR="$ADVISOR_MODELS_ROOT/data/math_solutions"
 export NUM_GPUS=8
 export LOGGER="wandb"  # change to "console" to print to stdout
 
+mkdir -p "$ADVISOR_MODELS_ROOT/ckpts/math_solutions"
+
 # Run training
-/advisor-models/SkyRL/skyrl-train/.venv/bin/python -m advisor_models.math_solutions.main_math_solutions \
+"$ADVISOR_MODELS_ROOT/SkyRL/skyrl-train/.venv/bin/python" -m advisor_models.math_solutions.main_math_solutions \
   data.train_data="['$DATA_DIR/train.parquet']" \
   data.val_data="['$DATA_DIR/validation.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -47,4 +53,4 @@ export LOGGER="wandb"  # change to "console" to print to stdout
   trainer.project_name="advisor_models" \
   trainer.run_name="math_solutions" \
   trainer.resume_mode=null \
-  trainer.ckpt_path="$HOME/ckpts/math_solutions"
+  trainer.ckpt_path="$ADVISOR_MODELS_ROOT/ckpts/math_solutions"

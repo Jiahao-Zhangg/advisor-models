@@ -8,6 +8,7 @@ Provides:
 import os
 import shutil
 import subprocess
+import tempfile
 from typing import List, Optional
 
 import numpy as np
@@ -212,6 +213,19 @@ def add_common_eval_args(parser) -> None:
         help="Model name (HuggingFace model identifier or path to local model)",
     )
 
+    # Model retrieval (optional)
+    parser.add_argument(
+        "--gcp",
+        action="store_true",
+        help="If set, downloads the model from a GCS bucket before evaluation.",
+    )
+    parser.add_argument(
+        "--bucket_name",
+        type=str,
+        default=None,
+        help="GCS bucket name to use with --gcp (e.g. 'my-bucket').",
+    )
+
     # vLLM configuration
     parser.add_argument(
         "--tensor_parallel_size",
@@ -258,3 +272,38 @@ def add_common_eval_args(parser) -> None:
         default="gpt-4o-mini",
         help="Model to use as student",
     )
+
+
+def download_model_if_needed(
+    *,
+    model_name: str,
+    gcp: bool = False,
+    bucket_name: Optional[str] = None,
+) -> tuple[str, Optional[str]]:
+    """Optionally download a model directory from GCS.
+
+    Returns:
+        (model_path, temp_dir_to_cleanup)
+    """
+    if not gcp:
+        return model_name, None
+
+    if not bucket_name and not model_name.startswith("gs://"):
+        raise ValueError("--bucket_name is required when using --gcp (or pass a gs:// path as --model_name).")
+
+    if model_name.startswith("gs://"):
+        gcs_src = model_name.rstrip("/")
+    else:
+        gcs_src = f"gs://{bucket_name}/{model_name}".rstrip("/")
+
+    if shutil.which("gsutil") is None:
+        raise RuntimeError("gsutil is required for --gcp downloads but was not found on PATH.")
+
+    temp_dir = tempfile.mkdtemp(prefix="advisor_models_model_")
+    subprocess.run(["gsutil", "-m", "cp", "-r", gcs_src, temp_dir], check=True)
+
+    # If gsutil copied a single directory/file into temp_dir, return that path.
+    entries = [e for e in os.listdir(temp_dir) if not e.startswith(".")]
+    if len(entries) == 1:
+        return os.path.join(temp_dir, entries[0]), temp_dir
+    return temp_dir, temp_dir

@@ -7,8 +7,15 @@ Subclasses implement domain-specific logic for different tasks.
 from skyrl_gym.envs.base_text_env import BaseTextEnv, BaseTextEnvStepOutput
 from typing import Dict, Any, List, Tuple
 from omegaconf import DictConfig
-from litellm import completion
 import os
+
+try:
+    # litellm enables multiple providers (OpenAI, Gemini, etc.) behind a single API.
+    from litellm import completion as litellm_completion  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    litellm_completion = None
+
+from openai import OpenAI
 
 # ENVIRONMENT VARIABLES
 ADVISOR_MODELS_MODE = os.environ.get("ADVISOR_MODELS_MODE", "advisor").lower()
@@ -203,12 +210,32 @@ class BaseAdvisorEnv(BaseTextEnv):
             str: The parsed response from the student model.
         """
         try:
-            response = completion(
-                model=self.student_model,
+            # Prefer LiteLLM when installed (supports non-OpenAI providers).
+            if litellm_completion is not None:
+                response = litellm_completion(
+                    model=self.student_model,
+                    messages=messages,
+                    temperature=temperature,
+                    timeout=timeout,
+                    base_url=API_BASE,
+                )
+                return response.choices[0].message.content
+
+            # Fallback: OpenAI client for OpenAI(-compatible) chat completion endpoints.
+            model = self.student_model
+            if model.startswith("openai/"):
+                model = model.split("/", 1)[1]
+            if "/" in model:
+                raise RuntimeError(
+                    f"litellm is not installed, but a provider-prefixed model was requested: {self.student_model}. "
+                    "Either install litellm or use an OpenAI model name like `gpt-4o-mini`."
+                )
+
+            client = OpenAI(base_url=API_BASE, timeout=timeout) if API_BASE else OpenAI(timeout=timeout)
+            response = client.chat.completions.create(
+                model=model,
                 messages=messages,
                 temperature=temperature,
-                timeout=timeout,
-                base_url=API_BASE,
             )
             return response.choices[0].message.content
         except Exception as e:  # pragma: no cover

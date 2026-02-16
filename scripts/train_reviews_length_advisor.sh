@@ -2,15 +2,21 @@
 
 # Training script for reviews length domain
 
+# Resolve repo root (directory containing this scripts/ folder).
+ADVISOR_MODELS_ROOT="${ADVISOR_MODELS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+cd "$ADVISOR_MODELS_ROOT" || exit 1
+
 # Set environment variables
 export RAY_RUNTIME_ENV_HOOK=ray._private.runtime_env.uv_runtime_env_hook.hook
-export PYTHONPATH="/advisor-models/SkyRL/skyrl-train:$PYTHONPATH"
-export DATA_DIR="/advisor-models/data/reviews"
+export PYTHONPATH="$ADVISOR_MODELS_ROOT/SkyRL/skyrl-train:$PYTHONPATH"
+export DATA_DIR="$ADVISOR_MODELS_ROOT/data/reviews"
 export NUM_GPUS=8
 export LOGGER="wandb"  # change to "console" to print to stdout
 
+mkdir -p "$ADVISOR_MODELS_ROOT/ckpts/reviews_length"
+
 # Run training
-/advisor-models/SkyRL/skyrl-train/.venv/bin/python -m advisor_models.reviews.main_reviews_length \
+"$ADVISOR_MODELS_ROOT/SkyRL/skyrl-train/.venv/bin/python" -m advisor_models.reviews.main_reviews_length \
   data.train_data="['$DATA_DIR/train_length.parquet']" \
   data.val_data="['$DATA_DIR/validation_length.parquet']" \
   trainer.algorithm.advantage_estimator="grpo" \
@@ -47,4 +53,4 @@ export LOGGER="wandb"  # change to "console" to print to stdout
   trainer.project_name="advisor_models" \
   trainer.run_name="reviews_length" \
   trainer.resume_mode=null \
-  trainer.ckpt_path="$HOME/ckpts/reviews_length"
+  trainer.ckpt_path="$ADVISOR_MODELS_ROOT/ckpts/reviews_length"

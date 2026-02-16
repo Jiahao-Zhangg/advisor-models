@@ -2,10 +2,14 @@
 
 # Training script for SWE-Smith domain
 
+# Resolve repo root (directory containing this scripts/ folder).
+ADVISOR_MODELS_ROOT="${ADVISOR_MODELS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+cd "$ADVISOR_MODELS_ROOT" || exit 1
+
 # Set environment variables
 export RAY_RUNTIME_ENV_HOOK=ray._private.runtime_env.uv_runtime_env_hook.hook
-export PYTHONPATH="/advisor-models/SkyRL/skyrl-train:$PYTHONPATH"
-export DATA_DIR="/advisor-models/data/swe_smith"
+export PYTHONPATH="$ADVISOR_MODELS_ROOT/SkyRL/skyrl-train:$PYTHONPATH"
+export DATA_DIR="$ADVISOR_MODELS_ROOT/data/swe_smith"
 export NUM_GPUS=8
 export LOGGER="wandb"  # change to "console" to print to stdout
 export ADVISOR_MODELS_MODE="advisor"  # "advisor" or "baseline"
@@ -18,8 +22,10 @@ export EVAL_SERVER_URL="http://YOUR_VM_IP:8082"   # CHANGE THIS to your VM's IP 
 # Repository to train on (e.g., jd__tenacity)
 export REPO="jd__tenacity"
 
+mkdir -p "$ADVISOR_MODELS_ROOT/ckpts/swe_smith_${REPO}"
+
 # Run training
-/advisor-models/SkyRL/skyrl-train/.venv/bin/python -m advisor_models.swe_smith.main_swe_smith \
+"$ADVISOR_MODELS_ROOT/SkyRL/skyrl-train/.venv/bin/python" -m advisor_models.swe_smith.main_swe_smith \
     data.train_data="['$DATA_DIR/train_${REPO}.json']" \
     data.val_data="['$DATA_DIR/validation_${REPO}.json']" \
     trainer.algorithm.advantage_estimator="grpo" \
@@ -57,7 +63,7 @@ export REPO="jd__tenacity"
     trainer.project_name="advisor_models" \
     trainer.run_name="swe_smith_${REPO}" \
     trainer.resume_mode=null \
-    trainer.ckpt_path="$HOME/ckpts/swe_smith_${REPO}" \
+    trainer.ckpt_path="$ADVISOR_MODELS_ROOT/ckpts/swe_smith_${REPO}" \
     generator.zero_reward_on_non_stop=true \
     trainer.hf_save_interval=20 \
     trainer.export_path="$HOME/exports/swe_smith_${REPO}"
